@@ -1,0 +1,646 @@
+var DeviceType;
+(function (DeviceType) {
+    DeviceType[DeviceType["Pc"] = 0] = "Pc";
+    DeviceType[DeviceType["Mobile"] = 1] = "Mobile";
+    DeviceType[DeviceType["PcLow"] = 2] = "PcLow";
+})(DeviceType || (DeviceType = {}));
+var SatisfiApp = (function () {
+    function SatisfiApp() {
+        this.Config;
+        this.LaunchSetting;
+        this.LeftPos = '3px';
+        this.TopPos = 0;
+        this.LabelTopPos = 0;
+        this.LabelLeftPos = 0;
+        this.DraggableWidth = 0;
+        this.DraggableHeight = 0;
+        this.Device;
+        this.showApp = function () {
+            var That = this,
+                ChatLabel = jQuery(That.LaunchSetting.ButtonSelector),
+                Iframe = document.querySelector("#divSatisfiChat #iframeContainer iframe"),
+                showChatApp = function () {
+                    jQuery("#divSatisfiChat #iframeContainer").css({
+                        display: 'inline-block',
+                        left: That.LeftPos
+                    }).animate({
+                        top: That.TopPos
+                    }, That.Config.AnimationDuration, function () {
+                        if (Iframe.src.length == 0) {
+                            Iframe.src = That.Config.PageUrl;
+                        }
+                    });
+                };
+            if (!That.LaunchSetting.HideDefaultLaunch) {
+                ChatLabel.animate({
+                    top: window.innerHeight
+                }, That.Config.AnimationDuration, function () {
+                    ChatLabel.hide();
+                    setTimeout(showChatApp, 100);
+                });
+            } else {
+                showChatApp();
+            }
+            Iframe.contentWindow.postMessage("set_width_header", '*');
+        };
+        this.showChatLabel = function () {
+            var That = this;
+            jQuery('#iframeContainer').animate({
+                top: window.innerHeight
+            }, That.Config.AnimationDuration, function () {
+                jQuery(this).css({
+                    display: 'none'
+                });
+                var ChatLabel = jQuery(That.LaunchSetting.ButtonSelector);
+                if (!That.LaunchSetting.HideDefaultLaunch) {
+                    ChatLabel.css({
+                        display: 'inline-block'
+                    });
+                    ChatLabel.animate({
+                        top: That.LabelTopPos
+                    }, That.Config.AnimationDuration);
+                }
+
+            });
+        };
+        this.onResize = function () {
+            this.Device = this.setDeviceType();
+            if (this.Device == DeviceType.Mobile || this.Device == DeviceType.PcLow) {
+                this.applyStyles();
+                var IframeHeight = (window.innerHeight - this.Config.FrameCaptionHeight - 4),
+                    IframeSubContainer = document.querySelector("#divSatisfiChat #iframeContainer #iframeSubContainer"),
+                    Iframe = document.querySelector("#divSatisfiChat #iframeContainer iframe");
+                this.Config.FrameHeight = IframeHeight + 'px';
+                this.Config.FrameWidth = (window.innerWidth - 6) + 'px';
+                IframeSubContainer.style.height = this.Config.FrameHeight;
+                this.Config.FrameHeight = parseInt(this.Config.FrameHeight.substr(0, this.Config.FrameHeight.length - 2)) + this.Config.FrameCaptionHeight;
+                jQuery("#divSatisfiChat #iframeContainer").css({
+                    height: this.Config.FrameHeight + 'px',
+                    width: this.Config.FrameWidth,
+                    left: '',
+                    top: ''
+                });
+                this.TopPos = '0';
+                this.LeftPos = '3px';
+                Iframe.contentWindow.postMessage("set_height:" + IframeHeight, '*');
+            } else {
+                var TotalIframeHeight,
+                    IframeHeight = 500,
+                    IframeSubContainer = document.querySelector("#divSatisfiChat #iframeContainer #iframeSubContainer"),
+                    Iframe = document.querySelector("#divSatisfiChat #iframeContainer iframe");
+                this.Config.FrameHeight = IframeHeight + 'px';
+                this.Config.FrameWidth = this.Config.FrameHeight;
+                IframeSubContainer.style.height = this.Config.FrameHeight;
+                this.Config.FrameHeight = parseInt(this.Config.FrameHeight.substr(0, this.Config.FrameHeight.length - 2)) + this.Config.FrameCaptionHeight;
+                this.applyStyles();
+                jQuery("#divSatisfiChat #iframeContainer").css({
+                    height: this.Config.FrameHeight + 'px',
+                    width: this.Config.FrameWidth,
+                    left: this.LeftPos,
+                    top: this.TopPos,
+                    bottom: '',
+                    right: ''
+                });
+                Iframe.contentWindow.postMessage("set_height:" + 500, '*');
+            }
+            this.setChatLabelSettings();
+            this.setChatBubblePosition();
+            this.DraggableWidth = window.innerWidth - Number(this.Config.FrameWidth.substr(0, this.Config.FrameWidth.length - 2));
+            this.DraggableHeight = window.innerHeight - this.Config.FrameHeight;
+        };
+        this.registerEvents = function () {
+            var That = this;
+            window.onresize = function () {
+                That.onResize();
+            }
+            //chat label click handler
+            if (That.Device == DeviceType.Mobile && That.Config.OpenInNewTabForMob) {
+                document.querySelector(That.LaunchSetting.ButtonSelector).addEventListener("click", function () {
+                    var win = window.open(That.Config.PageUrl, '_blank');
+                    win.focus();
+                });
+            } else {
+                document.querySelector(That.LaunchSetting.ButtonSelector).addEventListener("click", function () {
+                    That.showApp();
+                });
+            }
+            //icon on iframe top click event
+            document.querySelector("#divSatisfiChat #spanCloseChat").addEventListener("click", function () {
+                var Iframe = document.querySelector("#divSatisfiChat #iframeContainer iframe");
+                Iframe.contentWindow.postMessage("get_scroll", '*');
+                That.showChatLabel();
+            });
+            //register events for iframe
+            window.addEventListener("message", function (event) {
+                var origin = event.origin || event.originalEvent.origin; // For Chrome, the origin property is in the event.originalEvent object.
+                if (event.data.toLowerCase().includes("get_height")) {
+                    var Height = config.FrameHeight.substr(0, config.FrameHeight.length - 2);
+                    event.source.postMessage("set_height:" + Height, origin);
+                } else {
+                    return;
+                }
+            }, false);
+
+            //register iframe event
+            var Iframe = document.querySelector("#divSatisfiChat #iframeContainer iframe");
+            Iframe.onload = function () {
+                setTimeout(function () {
+                    document.querySelector("#divSatisfiChat #divImageLoading").style.display = 'none';
+                    Iframe.style.display = 'block';
+                    Iframe.contentWindow.postMessage("set_scroll_show_always", '*');
+                }, 5000);
+            };
+
+            //register chat dragiing
+            this.onDragChatContainer();
+        }
+
+        this.onDragChatContainer = function () {
+            var That = this;
+            if (That.Config.FloatChat) {
+                var DragElement = document.querySelector('#divSatisfiChat #iframeContainer'),
+                    XPosStart = 0,
+                    YPosStart = 0,
+                    //XPosMoved = 0,
+                    PrevLeftValue = 0,
+                    PrevTopValue = 0,
+                    Left,
+                    Top,
+                    MoveChat = function (e) {
+                        if (XPosStart == 0) {
+                            XPosStart = e.pageX;
+                            YPosStart = e.pageY;
+                        } else {
+                            //XPosMoved = e.pageX - XPosStart;
+                            Left = PrevLeftValue + e.pageX - XPosStart;
+                            if (Left >= 0 && Left < That.DraggableWidth) {
+                                DragElement.style.left = Left + "px";
+                            }
+                            Top = PrevTopValue + e.pageY - YPosStart;
+                            if (Top >= 0 && Top < That.DraggableHeight) {
+                                DragElement.style.top = Top + "px";
+                            }
+                        }
+                    };
+                That.DraggableWidth = window.innerWidth - Number(That.Config.FrameWidth.substr(0, That.Config.FrameWidth.length - 2));
+                That.DraggableHeight = window.innerHeight - That.Config.FrameHeight;
+                document.querySelector('#divSatisfiChat #iframeContainer').addEventListener('mousedown', function () {
+                    PrevLeftValue = Number(DragElement.style.left.substr(0, DragElement.style.left.length - 2));
+                    PrevTopValue = Number(DragElement.style.top.substr(0, DragElement.style.top.length - 2));
+                    window.addEventListener('mousemove', MoveChat, true);
+                }, false);
+                window.addEventListener('mouseup', function () {
+                    XPosStart = 0;
+                    YPosStart = 0;
+                    window.removeEventListener('mousemove', MoveChat, true);
+                }, false);
+                document.querySelector('#divSatisfiChat #divCloseChat').style.cssText += 'cursor:move;'
+            }
+        }
+        this.setChatLabelBorderRadiius = function () {
+            if (!this.Config.ChatLabel.Mobile) {
+                this.Config.ChatLabel.Mobile = {};
+            }
+            //set border radius
+            if (this.Config.ChatLabel.Desktop.BorderRadius && !this.Config.ChatLabel.Mobile.BorderRadius) {
+                this.Config.ChatLabel.Mobile.BorderRadius = this.Config.ChatLabel.Desktop.BorderRadius;
+            } else if (this.Config.ChatLabel.Desktop.Shape) {
+                var getBorderRadius = function (shape) {
+                    var Radius;
+                    switch (shape.toLowerCase()) {
+                        case 'round':
+                            Radius = '50%';
+                            break;
+                        case 'roundsquare':
+                            Radius = '10%';
+                            break;
+                        default: //square
+                            Radius = '2%';
+                            break;
+                    }
+                    return Radius;
+                }
+                this.Config.ChatLabel.Desktop.BorderRadius = getBorderRadius(this.Config.ChatLabel.Desktop.Shape);
+                this.Config.ChatLabel.Mobile.BorderRadius = (this.Config.ChatLabel.Mobile && this.Config.ChatLabel.Mobile.Shape) ?
+                    getBorderRadius(this.Config.ChatLabel.Mobile.Shape) : this.Config.ChatLabel.Desktop.BorderRadius;
+            } else {
+                this.Config.ChatLabel.Desktop.BorderRadius = this.Config.ChatLabel.Mobile.BorderRadius = '2%';
+            }
+
+        };
+        this.setChatLabelSettings = function (evaluateRadius) {
+
+            if (this.Config.ChatLabel && this.Config.ChatLabel.Desktop) {
+                var ChatLabelDiv = jQuery('#divSatisfiChat #divChatLabel div'),
+                    SpanChatLabel = jQuery('#divSatisfiChat #spanChatLabel');
+
+                ChatLabelDiv.addClass('ChatLabelShape');
+                ChatLabelDiv.find('i').addClass('fa fa-commenting');
+                if (evaluateRadius) {
+                    this.setChatLabelBorderRadiius();
+                }
+                if (this.Device == DeviceType.Pc) {
+                    ChatLabelDiv.css('borderRadius', this.Config.ChatLabel.Desktop.BorderRadius);
+
+                    // Chat Caption
+                    if (this.Config.ChatLabel.Desktop.Text) {
+                        SpanChatLabel.css('display', 'inline-block').text(this.Config.ChatLabel.Desktop.Text);
+                    } else {
+                        SpanChatLabel.css('display', "none");
+                    }
+
+                    //Chat Width
+                    if (this.Config.ChatLabel.Desktop.Width) {
+                        ChatLabelDiv.width(this.Config.ChatLabel.Desktop.Width);
+                    } else {
+                        ChatLabelDiv.width('auto');
+                    }
+                } else {
+                    ChatLabelDiv.css('borderRadius', this.Config.ChatLabel.Mobile.BorderRadius);
+
+                    // Chat Caption
+                    if (this.Config.ChatLabel.Mobile.Text) {
+                        SpanChatLabel.css('display', 'inline-block').text(this.Config.ChatLabel.Mobile.Text);
+                    } else {
+                        SpanChatLabel.css('display', "none");
+                    }
+
+                    //Chat Width
+                    if (this.Config.ChatLabel.Mobile.Width) {
+                        ChatLabelDiv.width(this.Config.ChatLabel.Mobile.Width);
+                    } else {
+                        ChatLabelDiv.width('auto');
+                    }
+                }
+
+            } else {
+                jQuery('#divSatisfiChat #spanChatLabel').text(this.Config.Caption).css('fontFamily', this.Config.Font);
+            }
+        }
+        this.jQueryCallBack = function () {
+            if (this.Config.HtmlAuto == true || this.Config.HtmlAuto == undefined) {
+                this.createHtmlElement(this.LaunchSetting.HideDefaultLaunch);
+            }
+            this.installFontAwesome();
+            if (!this.LaunchSetting.HideDefaultLaunch) {
+                jQuery('#divSatisfiChat #divChatLabel').css('color', this.Config.ForeColor);
+                jQuery('#divSatisfiChat #divChatLabel div').css('backgroundColor', this.Config.BorderColor);
+                this.setChatLabelSettings(true);
+            }
+
+            this.applyOneTimeStyles();
+            this.registerEvents();
+            this.showSatisfiApp();
+        }
+        this.start = function (config, launchSetting) {
+            var That = this;
+            this.removeItem('satisfi_sdk_loaded_css_file');
+            this.removeItem('satisfi_sdk_loaded_fontawesome');
+            this.Device = this.setDeviceType();
+            this.installCssFile();
+            this.setConfig(config, launchSetting);
+            this.installJquery(function () {
+                setTimeout(function () {
+                    That.jQueryCallBack();
+                }, 1000);
+            });
+        };
+        this.getFileSrc = function () {
+            var FileSrc = "";
+            var Scripts = document.getElementsByTagName('script');
+            for (var i = Scripts.length - 1; i >= 0; i--) {
+                var Index = Scripts[i].src.indexOf("satisfipopup");
+                if (Index > 0) {
+                    FileSrc = Scripts[i].src.substring(0, Index) + "satisfipopup-" + Scripts[i].src.substr(Index + 13, 5) + ".css";
+                    break;
+                }
+            }
+            return FileSrc;
+        };
+        this.installCssFile = function () {
+            var That = this,
+                Style = document.createElement('link');
+            Style.href = this.getFileSrc();
+            Style.rel = "stylesheet";
+            Style.onload = function () {
+                That.setItem('satisfi_sdk_loaded_css_file', 'true');
+            };
+            document.head.appendChild(Style);
+        };
+        this.installJquery = function (callBack) {
+            if (typeof jQuery == 'undefined') {
+                var script = document.createElement("SCRIPT");
+                script.src = 'https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js';
+                script.onload = function () {
+                    if (callBack != null) {
+                        callBack();
+                    }
+                }
+                script.type = 'text/javascript';
+                document.getElementsByTagName("head")[0].appendChild(script);
+            } else if (callBack != null) {
+                callBack();
+            }
+        };
+        this.installFontAwesome = function () {
+            var That = this,
+                Element = document.querySelector('#divSatisfiChat #iframeContainer #divCloseChat #Icon');
+            if (this.getRenderedFont(Element) !== 'FontAwesome') {
+                var Style = document.createElement('link');
+                Style.href = "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css";
+                Style.rel = "stylesheet";
+                Style.setAttribute("integrity", "sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN");
+                Style.setAttribute("crossorigin", "anonymous");
+                Style.onload = function () {
+                    That.setItem('satisfi_sdk_loaded_fontawesome', 'true');
+                }
+                document.head.appendChild(Style);
+            }
+        };
+        this.getRenderedFont = function (element) {
+            if (element.currentStyle) {
+                return element.currentStyle["fontFamily"];
+            } else if (document.defaultView) {
+                return document.defaultView.getComputedStyle(element, null).getPropertyValue("font-family");
+            } else {
+                return null;
+            }
+        };
+        this.setConfig = function (config, launchSetting) {
+            var DefaultSatisfiConfig = {
+                HtmlAuto: false,
+                PageUrl: "",
+                AnimationDuration: 250,
+                FrameHeight: "500px",
+                FrameCaptionHeight: 50, //"50px",
+                Caption: "Chat With Us",
+                FrameWidth: "500px",
+                BorderWidth: "0px",
+                BorderColor: 'black',
+                ForeColor: '#FFFFFF',
+                Font: 'Arial',
+                OpenInNewTabForMob: false
+            };
+            if (this.Device == DeviceType.Mobile || this.Device == DeviceType.PcLow) {
+                DefaultSatisfiConfig.FrameHeight = (window.innerHeight - 40 - 4).toString() + 'px';
+                DefaultSatisfiConfig.FrameWidth = this.Device == DeviceType.Mobile ? (window.innerWidth - 6).toString() + 'px' : (window.innerWidth - 25).toString() + 'px';
+            }
+            config.AnimationDuration = (config.AnimationDuration == null || isNaN(config.AnimationDuration)) ? DefaultSatisfiConfig.AnimationDuration : config.AnimationDuration;
+            config.FrameWidth = (config.FrameWidth == null || config.FrameWidth == undefined) ? DefaultSatisfiConfig.FrameWidth : config.FrameWidth;
+            config.FrameHeight = (config.FrameHeight == null || config.FrameHeight == undefined) ? DefaultSatisfiConfig.FrameHeight : config.FrameHeight;
+            config.FrameCaptionHeight = (config.FrameCaptionHeight == null || config.FrameCaptionHeight == undefined) ? DefaultSatisfiConfig.FrameCaptionHeight : config.FrameCaptionHeight;
+            config.Caption = (config.Caption == null || config.Caption == undefined) ? DefaultSatisfiConfig.Caption : config.Caption;
+            config.BorderWidth = (config.BorderWidth == null || config.BorderWidth == undefined) ? DefaultSatisfiConfig.BorderWidth : config.BorderWidth;
+            config.BorderColor = (config.BorderColor == null || config.BorderColor == undefined) ? DefaultSatisfiConfig.BorderColor : config.BorderColor;
+            config.ForeColor = (config.ForeColor == null || config.ForeColor == undefined) ? DefaultSatisfiConfig.ForeColor : config.ForeColor;
+            config.Font = (config.Font == null || config.Font == undefined) ? DefaultSatisfiConfig.Font : config.Font;
+            config.OpenInNewTabForMob = (config.OpenInNewTabForMob == null || config.OpenInNewTabForMob == undefined) ? DefaultSatisfiConfig.OpenInNewTabForMob : config.OpenInNewTabForMob;
+
+            if (!launchSetting) {
+                var DefaultLaunchSetting = {
+                    ButtonSelector: "#divSatisfiChat #divChatLabel",
+                    HideDefaultLaunch: false
+                };
+                this.LaunchSetting = DefaultLaunchSetting;
+            } else {
+                this.LaunchSetting = launchSetting;
+            }
+            this.Config = config;
+
+        };
+        this.setDeviceType = function () {
+            if (navigator.userAgent.match(/Android/i) ||
+                navigator.userAgent.match(/webOS/i) ||
+                navigator.userAgent.match(/iPhone/i) ||
+                navigator.userAgent.match(/iPod/i) ||
+                navigator.userAgent.match(/BlackBerry/i) ||
+                navigator.userAgent.match(/Windows Phone/i)) {
+                return DeviceType.Mobile;
+            } else if (window.innerWidth <= 600) {
+                return DeviceType.PcLow;
+            } else {
+                return DeviceType.Pc;
+            }
+        };
+        this.createHtmlElement = function (hideDefaultLabel) {
+            var Container = document.createElement('div');
+            Container.id = "divSatisfiChat";
+            //Iframe
+            var IframeContainer = document.createElement('div'),
+                IframeSubContainer = document.createElement('div');
+            IframeContainer.id = "iframeContainer";
+            IframeSubContainer.id = "iframeSubContainer";
+            var CloseIcon = document.createElement('div');
+            CloseIcon.id = "divCloseChat";
+            CloseIcon.innerHTML = '<span id="Icon" class="fa fa-commenting" aria-hidden="true"></span>' +
+                '<span id="spanFrameText"></span>' +
+                '<span class="fa fa-times" id="spanCloseChat"></span>';
+            var DivImageLoading = document.createElement('div');
+            DivImageLoading.id = 'divImageLoading';
+            DivImageLoading.innerHTML = '<img src="https://m.satis.fi/Resources/Logos/0/icons/satisfi-animated-logo.gif" alt="Loading"/>' +
+                '<div id="divLoadingLabel">Powered by <a href= "http://satis.fi/" target= "_blank">Satisfi</a></div >';
+            var Iframe = document.createElement('iframe');
+            IframeSubContainer.appendChild(DivImageLoading);
+            IframeSubContainer.appendChild(Iframe);
+            IframeContainer.appendChild(CloseIcon);
+            IframeContainer.appendChild(IframeSubContainer);
+            //ChatLabel
+            if (!hideDefaultLabel) {
+                var ChatLabelContainer = document.createElement('div');
+                ChatLabelContainer.id = "divChatLabel";
+                ChatLabelContainer.innerHTML = '<div><i class="fa fa-comment-o" aria-hidden="true"></i>' +
+                    '<span id= "spanChatLabel"></span></div>';
+                //Appending the sub main to main
+                Container.appendChild(IframeContainer);
+                Container.appendChild(ChatLabelContainer);
+            } else {
+                Container.appendChild(IframeContainer);
+            }
+            document.body.appendChild(Container);
+        };
+        this.getScrollbarWidth = function () {
+            var ScrollWidth = window.innerWidth - jQuery(document).width();
+            ScrollWidth = ScrollWidth >= 0 ? ScrollWidth : 0;
+            return ScrollWidth;
+        };
+        this.applyOneTimeStyles = function () {
+            var That = this,
+                IframeHeight = parseInt(this.Config.FrameHeight.substr(0, this.Config.FrameHeight.length - 2)),
+                IframeBorderRadius = (parseInt(That.Config.BorderWidth.substr(0, That.Config.BorderWidth.length - 2)) + 7).toString() + 'px';
+            this.Config.FrameHeight = IframeHeight + this.Config.FrameCaptionHeight;
+            jQuery("#divSatisfiChat #iframeContainer #iframeSubContainer").height(IframeHeight);
+            jQuery('#divSatisfiChat #divCloseChat').css({
+                'height': That.Config.FrameCaptionHeight,
+                'background-color': That.Config.BorderColor,
+                'color': That.Config.ForeColor
+            });
+            jQuery('#divSatisfiChat #spanFrameText').text(That.Config.Caption).css('fontFamily', That.Config.Font);
+            jQuery('#divSatisfiChat #iframeContainer').css({
+                "border-color": That.Config.BorderColor,
+                "border-width": That.Config.BorderWidth,
+                "border-top-left-radius": IframeBorderRadius,
+                "border-top-right-radius": IframeBorderRadius,
+                "width": That.Config.FrameWidth,
+                "height": That.Config.FrameHeight + 'px'
+            });
+            this.applyStyles();
+        };
+        this.applyStyles = function () {
+            var That = this,
+                ScrollWidth = this.getScrollbarWidth(),
+                MobileStyles = [{
+                    Selector: '#divSatisfiChat #iframeContainer',
+                    CssText: {
+                        bottom: '0px',
+                        height: '100%',
+                        width: '100%',
+                        right: '3px'
+                    }
+                }],
+                PcStyles = [{
+                    Selector: '#divSatisfiChat #iframeContainer',
+                    CssText: {
+                        top: window.innerHeight
+                    },
+                    Right: That.Config.ChatLabel ? 32 : 10, //10px,
+                    Bottom: That.Config.ChatLabel ? 32 : 1 //1px
+                }],
+                FrameWidth = this.Config.FrameWidth,
+                FrameHeight = this.Config.FrameHeight;
+            if (this.Device == DeviceType.Mobile || this.Device == DeviceType.PcLow) {
+                MobileStyles.forEach(function (item) {
+                    jQuery(item.Selector).css(item.CssText);
+                });
+            } else if (this.Device == DeviceType.Pc) {
+                PcStyles.forEach(function (item) {
+                    var Element = jQuery(item.Selector);
+                    Element.css(item.CssText);
+                    That.LeftPos = window.innerWidth - Number(FrameWidth.substr(0, FrameWidth.length - 2)) - item.Right - ScrollWidth;
+                    That.TopPos = window.innerHeight - FrameHeight - item.Bottom;
+                });
+            }
+        }
+
+        this.showSatisfiApp = function () {
+            var That = this;
+            if (this.getItem('satisfi_sdk_loaded_css_file') == 'true' && this.getItem('satisfi_sdk_loaded_fontawesome') == 'true') {
+                this.setChatBubblePosition();
+                document.querySelector('#divSatisfiChat').style.visibility = 'visible';
+            } else {
+                setTimeout(function () {
+                    That.showSatisfiApp();
+                }, 200);
+            }
+        };
+
+        this.setChatBubblePosition = function () {
+            var That = this,
+                ChatLabel = jQuery('#divSatisfiChat #divChatLabel'),
+                ScrollWidth = ScrollWidth = this.getScrollbarWidth(),
+                TopPosition, RightPosition;
+            if (That.Config.ChatLabel) {
+                if (this.Device == DeviceType.Pc) {
+
+                    TopPosition = 50;
+                    RightPosition = 50;
+                    if (That.Config.ChatLabel.Desktop && That.Config.ChatLabel.Desktop.Position) {
+                        if (That.Config.ChatLabel.Desktop.Position.Bottom) {
+                            var Bottom = That.Config.ChatLabel.Desktop.Position.Bottom;
+                            TopPosition = parseInt(Bottom.substr(0, Bottom.length - 2));
+                        }
+                        if (That.Config.ChatLabel.Desktop.Position.Right) {
+                            var Right = That.Config.ChatLabel.Desktop.Position.Right;
+                            RightPosition = parseInt(Right.substr(0, Right.length - 2));
+                        }
+                    }
+                } else {
+                    ScrollWidth = 0;
+                    TopPosition = 50;
+                    RightPosition = 50;
+                    if (That.Config.ChatLabel.Mobile && That.Config.ChatLabel.Mobile.Position) {
+                        if (That.Config.ChatLabel.Mobile.Position.Bottom) {
+                            var Bottom = That.Config.ChatLabel.Mobile.Position.Bottom;
+                            TopPosition = parseInt(Bottom.substr(0, Bottom.length - 2));
+                        }
+                        if (That.Config.ChatLabel.Mobile.Position.Right) {
+                            var Right = That.Config.ChatLabel.Mobile.Position.Right;
+                            RightPosition = parseInt(Right.substr(0, Right.length - 2));
+                        }
+                    }
+                }
+            } else {
+                TopPosition = 1;
+                RightPosition = 10;
+            }
+            That.LabelTopPos = window.innerHeight - ChatLabel.height() - TopPosition;
+            That.LabelLeftPos = window.innerWidth - ChatLabel.width() - ScrollWidth - RightPosition;
+
+            if (ChatLabel.css('display') != 'none') {
+                ChatLabel.css({
+                    top: That.LabelTopPos,
+                    left: That.LabelLeftPos
+                });
+            } else {
+                ChatLabel.css({
+                    left: That.LabelLeftPos
+                });
+            }
+        }
+
+        this.setItem = function (key, value) {
+            try {
+                localStorage.setItem(key, value);
+            } catch (error) {
+                var SetCookie = function (cname, cvalue, exdays) {
+                    var d = new Date();
+                    d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
+                    var expires = "expires=" + d.toUTCString();
+                    document.cookie = cname + "=" + cvalue + "; " + expires + ";path=/;";
+                }
+                SetCookie(key, value, 1);
+            }
+        }
+
+        this.getItem = function (key) {
+            var isLocalStorageNameSupported = function () {
+                var testKey = 'test',
+                    storage = window.localStorage;
+                try {
+                    storage.setItem(testKey, '1');
+                    storage.removeItem(testKey);
+                    return true;
+                } catch (error) {
+                    return false;
+                }
+            }
+            if (isLocalStorageNameSupported()) {
+                return localStorage.getItem(key);
+            } else {
+                var GetCookie = function (cname) {
+                    var name = cname + "=";
+                    var ca = document.cookie.split(';');
+                    for (var i = 0; i < ca.length; i++) {
+                        var c = ca[i];
+                        while (c.charAt(0) == ' ') c = c.substring(1);
+                        if (c.indexOf(name) == 0) return c.substring(name.length, c.length);
+                    }
+                    return "";
+                }
+                return GetCookie(key);
+            }
+        }
+
+        this.removeItem = function (key) {
+            try {
+                localStorage.removeItem(key);
+            } catch (error) {
+                DeleteCookie = function (name) {
+                    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+                }
+                DeleteCookie();
+            }
+        }
+
+    }
+    return SatisfiApp;
+}());
